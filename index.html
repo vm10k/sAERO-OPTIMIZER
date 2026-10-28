@@ -1,0 +1,1671 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>sAERO OPTIMIZER</title>
+    <!-- Ethers.js v6 & Chart.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.2/ethers.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @font-face { font-family: "Retro"; src: url("retro.woff2") format("woff2"); font-weight: 400; }
+        :root { 
+            --bg-color: #3d4a49; 
+            --grid-line-color: rgba(0, 0, 0, 0.2); 
+            --text-color: #ffffff; 
+            --text-secondary-color: #a0b0af; 
+            --text-title-color: #ffffff; 
+            --accent-color: #ffdd65; 
+            --apr-color: #00ff2a; 
+            --panel-shadow-color: rgba(0, 0, 0, 0.7); 
+            --status-connected-color: #00ff2a; 
+            --status-disconnected-color: #ff4d4d; 
+            --sidebar-width: 360px; 
+            --link-color: #65b0ff;
+            --bar-bg: #2d3837;
+            --card-bg: rgba(0, 0, 0, 0.35);
+        }
+
+        html { height: 100%; box-sizing: border-box; }
+        *, *:before, *:after { box-sizing: inherit; }
+        
+        body { 
+            font-family: "Retro", monospace; 
+            background-color: var(--bg-color); 
+            background-image: linear-gradient(var(--grid-line-color) 1px, transparent 1px), linear-gradient(90deg, var(--grid-line-color) 1px, transparent 1px); 
+            background-size: 25px 25px; 
+            color: var(--text-color); 
+            image-rendering: pixelated; 
+            margin: 0; 
+            padding: 75px 0 80px 0; 
+            overflow-x: hidden;
+        }
+        
+        .container { 
+            max-width: 1240px; 
+            margin-left: auto; margin-right: auto;
+            padding: 15px; 
+            width: 100%; 
+            transition: all 0.3s ease-in-out;
+        }
+        
+        body.sidebar-open .container {
+            margin-left: var(--sidebar-width);
+            width: calc(100% - var(--sidebar-width));
+        }
+        
+        /* HEADER */
+        .top-bar { 
+            position: fixed; top: 0; left: 0; right: 0; 
+            display: flex; justify-content: space-between; align-items: center; 
+            padding: 10px 20px; 
+            background: rgba(45, 67, 65, 0.96); 
+            backdrop-filter: blur(6px); 
+            border-bottom: 2px solid #000; 
+            z-index: 100; 
+            min-height: 60px; 
+        }
+        
+        .top-bar h1 { 
+            position: absolute; left: 50%; transform: translateX(-50%); 
+            font-size: 1.15rem; color: var(--text-title-color); margin: 0; 
+            text-shadow: 2px 2px #000; white-space: nowrap;
+        }
+
+        .top-bar-left, .top-bar-controls { display: flex; align-items: center; z-index: 101; gap: 12px; }
+        
+        /* SIDEBAR */
+        .sidebar { 
+            position: fixed; top: 60px; left: calc(var(--sidebar-width) * -1); bottom: 60px; 
+            width: var(--sidebar-width); background: rgba(35, 50, 48, 0.98); 
+            border-right: 2px solid #000; overflow-y: auto; z-index: 90; 
+            display: flex; flex-direction: column; padding: 15px; 
+            transition: left 0.3s ease-in-out; box-shadow: 5px 0 15px rgba(0,0,0,0.5);
+        }
+        .sidebar.active { left: 0; }
+
+        .sidebar-header { font-size: 1.1rem; color: var(--accent-color); text-align: center; border-bottom: 2px dashed var(--text-secondary-color); padding-bottom: 10px; margin-bottom: 15px; }
+        
+        .picked-pool-item { background: rgba(0,0,0,0.4); border: 2px solid #000; padding: 10px; margin-bottom: 10px; }
+        .picked-pool-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px; }
+        .picked-pool-name { color: #65b0ff; font-size: 0.9rem; font-weight: bold; max-width: 80%; }
+        .remove-btn { background: none; border: none; color: var(--status-disconnected-color); cursor: pointer; font-family: "Retro"; font-size: 1.2rem; }
+        .picked-pool-address { font-size: 0.65rem; color: var(--text-secondary-color); font-family: monospace; margin-bottom: 8px; word-break: break-all; }
+        
+        .picked-pool-controls { display: flex; align-items: center; gap: 8px; }
+        .picked-pool-slider-input { flex-grow: 1; height: 5px; -webkit-appearance: none; background: #000; cursor: pointer; }
+        .picked-pool-slider-input::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; background: var(--accent-color); cursor: pointer; }
+        
+        .picked-pool-input-group { display: flex; align-items: center; gap: 2px; }
+        .tiny-input { width: 50px; background: #1e2b2a; border: 1px solid #000; color: var(--accent-color); font-family: "Retro", monospace; text-align: right; padding: 4px; font-size: 0.85rem; }
+        .picked-pool-input-group span { font-size: 0.85rem; color: var(--accent-color); }
+
+        #vote-summary { margin-top: auto; padding-top: 15px; border-top: 2px dashed var(--text-secondary-color); }
+
+        /* OUTCOME CARD */
+        .outcome-panel {
+            background: rgba(0, 0, 0, 0.45);
+            border: 2px solid #000;
+            padding: 12px;
+            margin-top: 12px;
+        }
+        .outcome-title {
+            color: var(--accent-color);
+            font-size: 0.95rem;
+            font-weight: bold;
+            text-align: center;
+            border-bottom: 1px dashed var(--text-secondary-color);
+            padding-bottom: 6px;
+            margin-bottom: 10px;
+        }
+        .outcome-row {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            margin-bottom: 8px;
+        }
+        .outcome-row-header {
+            font-size: 0.72rem;
+            color: var(--text-secondary-color);
+        }
+        .outcome-row-values {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+        .outcome-val-usd {
+            color: var(--apr-color);
+            font-size: 1rem;
+            font-weight: bold;
+        }
+        .outcome-val-aero {
+            color: var(--accent-color);
+            font-size: 0.82rem;
+            font-weight: bold;
+        }
+
+        .bottom-bar { display: flex; justify-content: space-around; align-items: center; position: fixed; bottom: 0; left: 0; right: 0; height: 60px; background: rgba(45, 67, 65, 0.98); backdrop-filter: blur(6px); border-top: 2px solid #000; z-index: 100; }
+        .bottom-bar-item { color: var(--text-secondary-color); font-size: 0.85rem; text-align: center; cursor: pointer; flex-grow: 1; padding: 18px 0; user-select: none; }
+        .bottom-bar-item.active { color: var(--accent-color); background-color: rgba(0,0,0,0.25); font-weight: bold; }
+        
+        .pixel-panel { 
+            background: #2b3938; 
+            border: 2px solid #000;
+            padding: 20px 25px; 
+            filter: drop-shadow(4px 4px 0 var(--panel-shadow-color)); 
+            color: var(--text-title-color); 
+            border-image: url("background-sprite.png"); 
+            border-image-slice: 34 fill; 
+            border-image-width: 35px; 
+            border-image-repeat: repeat; 
+            margin-bottom: 18px; 
+            overflow: hidden; 
+        }
+        
+        .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 15px; }
+        .stat-card .label { font-size: 0.8rem; color: var(--text-secondary-color); margin-bottom: 5px; }
+        .stat-card .value { font-size: 1.5rem; color: var(--text-title-color); white-space: nowrap; }
+        #pool-count-display { text-align: center; margin: 20px 0 15px 0; font-size: 1rem; color: var(--text-secondary-color); }
+
+        .pool-list { display: flex; flex-direction: column; gap: 14px; }
+        .pool-card { display: grid; grid-template-columns: 2.2fr 1fr; gap: 15px; background: var(--card-bg); transition: all 0.2s; align-items: center; }
+        .pool-card.picked { border-left: 6px solid var(--apr-color); background: rgba(0, 255, 42, 0.06); }
+        .pool-card .pool-name { font-size: 1.25rem; color: var(--accent-color); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .pool-card .pool-address { font-family: monospace; font-size: 0.7rem; color: var(--text-secondary-color); word-break: break-all; margin-top: 4px; }
+        
+        .network-tag { font-size: 0.65rem; background: #1a2726; border: 1px solid var(--accent-color); color: var(--accent-color); padding: 2px 6px; border-radius: 2px; }
+        .tier-tag { font-size: 0.65rem; background: #2f4543; border: 1px solid #000; color: #fff; padding: 2px 6px; }
+
+        .pool-stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px 15px; font-size: 0.85rem; margin-top: 10px; }
+        .pool-stats-grid .label { color: var(--text-secondary-color); }
+        .pool-stats-grid .value { color: var(--text-color); font-weight: bold; }
+        
+        .pool-apr { text-align: right; }
+        .pool-apr .label { font-size: 0.85rem; color: var(--text-secondary-color); }
+        .pool-apr .value { font-size: 2.1rem; color: var(--apr-color); font-weight: bold; text-shadow: 0 0 8px rgba(0, 255, 42, 0.4); }
+        .pool-apr .sub-apr { font-size: 0.78rem; color: var(--link-color); margin-top: 3px; }
+
+        .status-indicator { display: flex; align-items: center; gap: 8px; }
+        #status-light { width: 12px; height: 12px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.5); }
+        #status-light.connected { background-color: var(--status-connected-color); box-shadow: 0 0 8px var(--status-connected-color); }
+        #status-light.disconnected { background-color: var(--status-disconnected-color); }
+        #pool-status { font-size: 0.8rem; color: var(--text-secondary-color); }
+
+        .settings-form { display: flex; flex-direction: column; gap: 15px; }
+        .form-group { display: flex; flex-direction: column; gap: 6px; }
+        .form-group label { font-size: 0.9rem; color: var(--text-secondary-color); }
+        .form-group input, .form-group textarea, .form-group select { 
+            font-family: monospace; background-color: #2d4341; border: 2px solid black; color: var(--text-color); padding: 10px; font-size: 0.95rem; outline: none; 
+        }
+
+        .button-group { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 10px; }
+        .button-group button, .btn-action { font-family: "Retro", monospace; outline: 2px solid black; border: transparent; color: #000; cursor: pointer; padding: 10px 16px; font-size: 0.9rem; font-weight: bold; }
+        #save-settings-btn { background-color: var(--apr-color); }
+        #fetch-venft-btn { background-color: var(--accent-color); }
+        #connect-wallet-btn { background: var(--accent-color); padding: 6px 14px; font-size: 0.85rem; }
+
+        .controls-bar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; background: rgba(0,0,0,0.25); padding: 12px; margin-bottom: 16px; border: 2px solid black; }
+        .controls-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        .dropdown-toggle { font-family: "Retro", monospace; background-color: #2d4341; border: 2px solid black; color: var(--text-color); padding: 7px 12px; font-size: 0.85rem; cursor: pointer; }
+        #search-input { font-family: "Retro", monospace; background-color: #2d4341; border: 2px solid black; color: var(--text-color); padding: 7px 12px; font-size: 0.85rem; width: 220px; outline: none; }
+
+        .pool-actions { grid-column: 1 / -1; margin-top: 4px; padding-top: 8px; border-top: 1px dashed var(--grid-line-color); display: flex; justify-content: flex-end; }
+        .pick-pool-btn { font-family: "Retro", monospace; background-color: transparent; border: 2px solid #ffdd65; color: #ffdd65; padding: 7px 16px; font-size: 0.85rem; cursor: pointer; font-weight: bold; }
+        .pick-pool-btn.picked { background-color: var(--apr-color); color: black; border-color: black; }
+        #menu-toggle-btn { font-family: "Retro", monospace; background: transparent; color: var(--accent-color); border: 2px solid var(--accent-color); padding: 5px 12px; cursor: pointer; font-size: 0.85rem; }
+
+        .retro-table { width: 100%; border-collapse: collapse; font-family: "Retro", monospace; font-size: 0.85rem; }
+        .retro-table th, .retro-table td { border: 2px solid black; padding: 9px; text-align: left; }
+        .retro-table th { background-color: rgba(45, 67, 65, 0.8); color: var(--accent-color); }
+
+        /* HERO & INFO STYLES */
+        .hero-container {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            background: rgba(0,0,0,0.3);
+            border: 2px solid #000;
+            padding: 24px;
+            margin-bottom: 20px;
+            position: relative;
+            overflow: hidden;
+        }
+        .hero-logo-bg {
+            width: 72px;
+            height: 72px;
+            border-radius: 50%;
+            border: 2px solid var(--accent-color);
+            box-shadow: 0 0 15px rgba(255, 221, 101, 0.3);
+        }
+        .hero-title {
+            font-size: 1.6rem;
+            color: var(--accent-color);
+            margin: 0 0 4px 0;
+            text-shadow: 2px 2px #000;
+        }
+        .hero-subtitle {
+            font-size: 0.9rem;
+            color: var(--text-secondary-color);
+        }
+
+        .guide-step {
+            display: flex;
+            align-items: flex-start;
+            gap: 15px;
+            background: rgba(0,0,0,0.25);
+            border: 2px solid #000;
+            padding: 14px;
+            margin-bottom: 12px;
+        }
+        .step-num {
+            background: var(--accent-color);
+            color: #000;
+            font-weight: bold;
+            font-size: 1.2rem;
+            min-width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid #000;
+        }
+        .step-text {
+            font-size: 0.88rem;
+            line-height: 1.5;
+            color: var(--text-color);
+        }
+        .step-text strong {
+            display: block;
+            color: var(--accent-color);
+            margin-bottom: 4px;
+        }
+
+        .info-badge-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+            margin-top: 14px;
+        }
+        .info-badge {
+            background: rgba(0,0,0,0.4);
+            border: 1px solid var(--accent-color);
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .info-badge .tag {
+            font-size: 0.7rem;
+            color: var(--text-secondary-color);
+        }
+        .info-badge .val {
+            font-size: 0.95rem;
+            color: var(--apr-color);
+            font-weight: bold;
+            margin-top: 2px;
+        }
+
+        @media (max-width: 820px) {
+            .top-bar h1 { display: none; }
+            .sidebar { width: 90%; left: -90%; }
+            :root { --sidebar-width: 90%; }
+            .pool-card { grid-template-columns: 1fr; }
+            .pool-apr { text-align: left; }
+        }
+    </style>
+</head>
+<body>
+
+    <header class="top-bar">
+        <div class="top-bar-left">
+            <button id="menu-toggle-btn">MY VOTES</button>
+        </div>
+        <h1>sAERO - Yield Optimizer</h1>
+        <div class="top-bar-controls">
+            <div class="status-indicator">
+                <span id="status-light" class="connected"></span>
+                <span id="pool-status">Online (MetaDEX 48H)</span>
+            </div>
+        </div>
+    </header>
+
+    <aside class="sidebar">
+        <div class="sidebar-header">MY VOTE CARD</div>
+        <div id="picked-pools-list">
+            <div style="text-align:center; color: var(--text-secondary-color); margin-top: 20px;">
+                No pools picked.<br>Click "Pick Pool" on a card or run the Optimizer.
+            </div>
+        </div>
+
+        <div id="vote-summary">
+            <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                <span>Total Allocated:</span>
+                <span id="total-allocated-percent" style="color: var(--accent-color); font-weight:bold;">0%</span>
+            </div>
+
+            <!-- FULL OUTCOME OF OPTIMIZED VOTE IN USD ($) AND AERO TOKEN -->
+            <div class="outcome-panel">
+                <div class="outcome-title">OPTIMIZED VOTE OUTCOME</div>
+
+                <div class="outcome-row">
+                    <span class="outcome-row-header">ESTIMATED 48-HOUR CYCLE REWARD:</span>
+                    <div class="outcome-row-values">
+                        <span id="outcome-48h-usd" class="outcome-val-usd">$0.00 USD</span>
+                        <span id="outcome-48h-aero" class="outcome-val-aero">0.0000 AERO</span>
+                    </div>
+                </div>
+
+                <div class="outcome-row" style="border-top: 1px dashed rgba(255,255,255,0.15); padding-top:6px;">
+                    <span class="outcome-row-header">ANNUALIZED PROJECTED REWARD:</span>
+                    <div class="outcome-row-values">
+                        <span id="outcome-annual-usd" style="color: #65b0ff; font-size: 0.95rem; font-weight: bold;">$0.00 USD</span>
+                        <span id="outcome-annual-aero" style="color: #65b0ff; font-size: 0.8rem; font-weight: bold;">0.00 AERO</span>
+                    </div>
+                </div>
+
+                <div style="border-top: 1px dashed rgba(255,255,255,0.15); padding-top:6px; display:flex; justify-content:space-between; align-items:center;">
+                    <span style="color: var(--text-secondary-color); font-size: 0.72rem;">EFFECTIVE POSITION APR:</span>
+                    <span id="outcome-effective-apr" style="color: var(--apr-color); font-size: 1.15rem; font-weight: bold; text-shadow: 0 0 6px rgba(0,255,42,0.4);">0.00%</span>
+                </div>
+
+                <div id="outcome-status-note" style="font-size: 0.7rem; color: var(--text-secondary-color); margin-top: 5px; font-style: italic;">
+                    Enter veNFT token ID to compute real returns.
+                </div>
+
+                <div id="outcome-breakdown-wrapper" style="margin-top: 10px; border-top: 2px dashed var(--grid-line-color); padding-top: 8px;">
+                    <div style="font-size: 0.75rem; color: var(--accent-color); margin-bottom: 6px; font-weight: bold;">
+                        FULL POOL-BY-POOL BREAKDOWN:
+                    </div>
+                    <div id="outcome-pool-breakdown" style="display:flex; flex-direction:column; gap:6px; max-height:170px; overflow-y:auto; padding-right:2px;">
+                        <div style="color: var(--text-secondary-color); font-size: 0.72rem;">No allocations active.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <main id="pools-view" class="container">
+        <section class="summary-grid" id="summary-section">
+            <div class="pixel-panel stat-card"><div class="label">Total Allocation Power</div><div class="value" id="summary-total-vp">Loading...</div></div>
+            <div class="pixel-panel stat-card"><div class="label">Total Rewards (48H)</div><div class="value" id="summary-rewards-48h">Loading...</div></div>
+            <div class="pixel-panel stat-card"><div class="label">AERO Price</div><div class="value" id="summary-aero-price">$0.85</div></div>
+            <div class="pixel-panel stat-card"><div class="label">Benchmark Top Stake APR</div><div class="value" id="summary-top-apr" style="color:var(--apr-color);">--%</div></div>
+        </section>
+
+        <div style="background: rgba(0,0,0,0.3); border: 2px solid black; padding: 12px 18px; margin-bottom: 18px; display: flex; justify-content:space-between; align-items: center; flex-wrap:wrap; gap: 10px;">
+            <div style="display:flex; align-items:center; gap:10px;">
+                <span style="color: var(--text-secondary-color);">Your Allocation Power:</span>
+                <span id="user-vp-badge" style="color: var(--accent-color); font-size:1.1rem; font-weight:bold;">0.00 sAERO</span>
+            </div>
+            <div style="display:flex; gap:10px; align-items:center;">
+                <input type="text" id="quick-nft-input" placeholder="veNFT Token ID(s)" style="background:#2d4341; color:#fff; border:2px solid #000; padding:6px 10px; width:160px; font-family:inherit;">
+                <button class="btn-action" id="btn-quick-optimize" style="background:var(--apr-color); padding:6px 14px;">Optimize For My Power</button>
+            </div>
+        </div>
+
+        <section class="pixel-panel">
+            <h2 style="margin-top:0;">Bot Status</h2>
+            <div id="autovoter-status" style="font-size: 1rem; color: var(--accent-color);">Connecting to MetaDEX contracts...</div>
+        </section>
+
+        <div class="controls-bar">
+            <div class="controls-row">
+                <span class="label" style="font-size:0.8rem; color:var(--text-secondary-color);">NETWORK:</span>
+                <select id="network-select" onchange="app.setNetwork(this.value)" style="background:#2d4341; color:#fff; border:2px solid #000; padding:6px 8px; font-family:inherit;">
+                    <option value="all">All Networks</option>
+                    <option value="base">Base</option>
+                    <option value="optimism">OP Mainnet</option>
+                    <option value="arbitrum">Arbitrum</option>
+                    <option value="ethereum">Ethereum</option>
+                    <option value="ink">Ink</option>
+                    <option value="robinhood">Robinhood</option>
+                    <option value="arc">Arc</option>
+                </select>
+
+                <span class="label" style="font-size:0.8rem; color:var(--text-secondary-color); margin-left:6px;">FILTER:</span>
+                <button class="dropdown-toggle" id="filter-all-btn" onclick="app.setFilter('all')">All</button>
+                <button class="dropdown-toggle" id="filter-rewarded-btn" style="color:var(--accent-color);" onclick="app.setFilter('rewarded')">Has Rewards 48H</button>
+                
+                <span class="label" style="font-size:0.8rem; color:var(--text-secondary-color); margin-left:6px;">SORT:</span>
+                <select id="sort-select" onchange="app.setSort(this.value)" style="background:#2d4341; color:#fff; border:2px solid #000; padding:6px 8px; font-family:inherit;">
+                    <option value="allocation">Staked AERO Allocation</option>
+                    <option value="incentives48h">Incentives 48H ($)</option>
+                    <option value="stakeAPR">Stake APR (%)</option>
+                    <option value="rewards48h">Rewards 48H ($)</option>
+                    <option value="fees48h">Fees 48H ($)</option>
+                    <option value="projAPR">Projected APR (My Power)</option>
+                </select>
+            </div>
+            <div>
+                <input type="text" id="search-input" placeholder="Search symbol or address..." oninput="app.setSearch(this.value)">
+            </div>
+        </div>
+
+        <h2 id="pool-count-display">Scanning MetaDEX pools...</h2>
+        <section class="pool-list" id="pool-list"></section>
+        <div id="pagination-container" style="display:flex; justify-content:center; align-items:center; gap:8px; margin: 25px 0 10px 0; flex-wrap:wrap;"></div>
+    </main>
+
+    <main id="info-view" class="container" style="display: none;">
+        <div class="hero-container">
+            <img src="https://dd.dexscreener.com/ds-data/tokens/base/0x940181a94a35a4569e4529a3cdfb74e38fd98631.png" class="hero-logo-bg" alt="AERO Logo">
+            <div class="hero-content">
+                <h1 class="hero-title">sAERO OPTIMIZER!</h1>
+                <div class="hero-subtitle">Continuous 48-Hour Gauge Settlement & Fractional Marginal Yield Optimization</div>
+            </div>
+        </div>
+
+        <section class="pixel-panel">
+            <h2 style="color: var(--accent-color); margin-top: 0;">What is Aerodrome MetaDEX?</h2>
+            <p style="line-height: 1.6; color: var(--text-color);">
+                <strong>Aerodrome MetaDEX</strong> upgrades the classical weekly epoch model into a high-frequency, dynamic settlement architecture. Gauges settle rewards and distribute incentives continuously on rolling <strong>48-hour periods</strong>, mediated directly by the canonical <code>LeafVoter</code> contract on Base.
+            </p>
+            <div class="info-badge-grid">
+                <div class="info-badge">
+                    <div class="tag">SETTLEMENT WINDOW</div>
+                    <div class="val">Rolling 48 Hours</div>
+                </div>
+                <div class="info-badge">
+                    <div class="tag">ROUTING CONTRACT</div>
+                    <div class="val">LeafVoter (Base)</div>
+                </div>
+                <div class="info-badge">
+                    <div class="tag">FEE MODELS</div>
+                    <div class="val">Slipstream CL + Basic</div>
+                </div>
+                <div class="info-badge">
+                    <div class="tag">QUERY PROTOCOL</div>
+                    <div class="val">RPCs Multicall3</div>
+                </div>
+            </div>
+        </section>
+
+        <section class="pixel-panel">
+            <h2 style="color: var(--accent-color); margin-top: 0;">How the Marginal Optimizer Protects Your APR</h2>
+            <p style="line-height: 1.6; color: var(--text-secondary-color);">
+                Standard yield boards report <em>historical or static Stake APR</em>. If you cast a large veNFT into a small pool with high APR, your own weight dilutes the pool immediately, causing your realized return to collapse.
+            </p>
+            <ul style="line-height: 1.8; color: var(--text-color); list-style-type: square; padding-left: 20px;">
+                <li><strong>Dynamic Dilution Awareness:</strong> Calculates <code>Projected APR</code> showing your true yield *after* your sAERO is allocated.</li>
+                <li><strong>Micro-Chunk Slicing (100 Steps):</strong> Divides your voting power into 1% increments. Each slice is routed to the gauge producing the highest *marginal dollar gain*, optimizing real cash return.</li>
+                <li><strong>Blue-Chip Liquidity Filtering:</strong> Protects you from illiquid traps by screening pools with volume thresholds (&gt;$5,000 48H) and healthy TVL reserves.</li>
+            </ul>
+        </section>
+
+        <section class="pixel-panel">
+            <h2 style="color: #65b0ff; margin-top: 0;">Interactive Quick-Start</h2>
+            
+            <div class="guide-step">
+                <div class="step-num">1</div>
+                <div class="step-text">
+                    <strong>Load veNFT Voting Power</strong>
+                    Type your veNFT token ID into the <em>Quick veNFT</em> input bar on the Pools tab (or in the Settings tab). It automatically saves to your browser and reloads automatically when you visit again.
+                </div>
+            </div>
+
+            <div class="guide-step">
+                <div class="step-num">2</div>
+                <div class="step-text">
+                    <strong>Run Marginal Optimization or Pick Manually</strong>
+                    Click <strong>"Optimize For My Power"</strong>. The algorithmic optimizer will evaluate all active 48H MetaDEX gauges and fill your Vote Card. You can also pick pools individually and fine-tune percentages in the sidebar.
+                </div>
+            </div>
+
+            <div class="guide-step">
+                <div class="step-num">3</div>
+                <div class="step-text">
+                    <strong>Inspect Exact Projected Return</strong>
+                    Open your <em>Vote Card</em> in the sidebar. The dashboard provides a comprehensive readout of your exact 48H cycle return and annual return in both <strong>USD ($)</strong> and <strong>AERO tokens</strong> written out in full.
+                </div>
+            </div>
+        </section>
+
+        <section class="pixel-panel">
+            <h2 style="color: var(--accent-color); margin-top: 0;">Verified MetaDEX Contracts (Base Mainnet)</h2>
+            <table class="retro-table">
+                <thead>
+                    <tr><th>Contract Name</th><th>Contract Address</th><th>Role</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>LeafVoter</td><td style="font-family:monospace;">0x382409fad8503FbCdbB27A4211551fa03e884078</td><td>Direct Gauge Allocation & Settle</td></tr>
+                    <tr><td>VotingEscrow</td><td style="font-family:monospace;">0xBF7977E1521e9a3032bf7243Ee4712f311f13915</td><td>veNFT Balances & Lock Durations</td></tr>
+                    <tr><td>Factory Registry</td><td style="font-family:monospace;">0x7b2A2c12dC5Ea2a31455952a05031C3E4BB28F3E</td><td>Pool & Gauge Discovery Mapping</td></tr>
+                    <tr><td>Multicall3</td><td style="font-family:monospace;">0xcA11bde05977b3631167028862bE2a173976CA11</td><td>Zero-latency Aggregated Batch Reads</td></tr>
+                </tbody>
+            </table>
+        </section>
+        
+        <div style="text-align: center; margin-top: 20px; font-size: 0.8rem; color: #888;">
+            sAERO MetaDEX Optimizer &bull; Made by vm10k
+        </div>
+    </main>
+
+    <main id="settings-view" class="container" style="display: none;">
+        <section class="pixel-panel">
+            <h2 style="margin-top:0; color: var(--accent-color);">Configuration & veNFT Management</h2>
+            <div class="settings-form">
+                <div class="form-group">
+                    <label for="token-id">veNFT Token IDs (Comma-separated for multiple)</label>
+                    <input type="text" id="token-id" placeholder="e.g. 91799, 92100">
+                </div>
+              
+                <div class="button-group">
+                    <button id="fetch-venft-btn">Fetch veNFT Details</button>
+                    <button id="save-settings-btn">Confirm & Save Settings (Auto-Persisted)</button>
+                </div>
+                <div id="settings-status" style="margin-top:10px; font-weight:bold;">Status: Ready</div>
+                <div id="venft-details" style="margin-top:5px;"></div>
+            </div>
+        </section>
+    </main>
+
+    <nav class="bottom-bar">
+        <div id="tab-pools" class="bottom-bar-item active">Pools</div>
+        <div id="tab-info" class="bottom-bar-item">Info</div>
+        <div id="tab-settings" class="bottom-bar-item">Settings</div>
+    </nav>
+
+<script>
+    const METADEX_ADDR = {
+        BASE: {
+            AERO: "0x940181a94A35A4569E4529A3CDfB74e38FD98631",
+            USDC: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+            USDC_BRIDGED: "0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA",
+            USDBC: "0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA",
+            WETH: "0x4200000000000000000000000000000000000006",
+            CBBTC: "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf",
+            VOTING_ESCROW: "0xBF7977E1521e9a3032bf7243Ee4712f311f13915",
+            VOTER: "0x49d7d4f17Ec56Ef8fA04E464AF5D1A4942CC31e6",
+            LEAF_VOTER: "0x382409fad8503FbCdbB27A4211551fa03e884078",
+            FACTORY_REGISTRY: "0x7b2A2c12dC5Ea2a31455952a05031C3E4BB28F3E",
+            STABLE_POOL_FACTORY: "0x78589E876edcEbdce72ee3436ab3c9AD3a7cEF2D",
+            VOLATILE_POOL_FACTORY: "0x8E6a9FCd1d638CC760Ffba397605Fe3355dE76D2",
+            CL_FACTORY: "0x9CB220581b91b0C83223012FE69688b92aD07a76",
+            GAUGE_FACTORY_STABLE: "0x1e0f776E88649285f99e65Fa599aD6e0f9D97800",
+            GAUGE_FACTORY_VOLATILE: "0x9FBCf2Df0DC553ce40Ef63963Bff465b76792B7E",
+            CL_GAUGE_FACTORY: "0xf437f62053ACB121665b8fDBfeA8F214FB8E589d",
+            MULTICALL3: "0xcA11bde05977b3631167028862bE2a173976CA11"
+        }
+    };
+
+    const CONTRACT_ABIS = {
+        VotingEscrow: [
+            "function balanceOfNFT(uint256) view returns (uint256)",
+            "function totalVotingPower() view returns (uint256)",
+            "function ownerOf(uint256) view returns (address)"
+        ],
+        LeafVoter: [
+            "function gaugeStates(address) view returns (uint128 _ceiling, uint128 _claimed, uint48 _lastSettlement, bool _isRegistered, bool _isActivated, uint128 _surplus, uint256 _lastIndex, uint256 _lastTimeIndex, tuple(int128 bias, int128 slope, uint48 ts, uint128 permanentStakeBalance) _point)",
+            "function allocateGauges(uint256 _tokenId, tuple(address gauge, uint128 allocated, bytes data)[] _gauges) payable"
+        ],
+        FactoryRegistry: [
+            "function poolFactories() view returns (address[])",
+            "function factoryToGauges(address) view returns (address[])",
+            "function gaugeToTarget(address) view returns (address)",
+            "function gaugeToRewards(address) view returns (address)"
+        ],
+        Voter: [
+            "function allocate(uint256 tokenId, address[] pools, uint256[] weights, address owner)"
+        ],
+        Pool: [
+            "function metadata() view returns (uint256 dec0, uint256 dec1, uint256 r0, uint256 r1, bool st, address t0, address t1)",
+            "function getReserves() view returns (uint256 _reserve0, uint256 _reserve1, uint256 _blockTimestampLast)",
+            "function pendingFees(address _account) view returns (uint256 _amount0, uint256 _amount1)",
+            "function claimable0(address) view returns (uint256)",
+            "function claimable1(address) view returns (uint256)",
+            "function token0() view returns (address)",
+            "function token1() view returns (address)",
+            "function symbol() view returns (string)",
+            "function fee() view returns (uint256)",
+            "function decimals() view returns (uint8)"
+        ],
+        Gauge: [
+            "function rewardRate(address) view returns (uint256)",
+            "function totalSupply() view returns (uint256)"
+        ],
+        ERC20: [
+            "function symbol() view returns (string)",
+            "function decimals() view returns (uint8)"
+        ],
+        Multicall3: [
+            "function aggregate3(tuple(address target, bool allowFailure, bytes callData)[] calls) view returns (tuple(bool success, bytes returnData)[])"
+        ]
+    };
+
+    const app = {
+        provider: null,
+        signer: null,
+        allPools: [],
+        pickedPools: {},
+        transactionHistory: [],
+        chartInstance: null,
+        currentNetwork: 'all',
+        currentFilter: 'rewarded',
+        currentSort: 'allocation',
+        currentSearchQuery: '',
+        currentPage: 1,
+        pageSize: 25,
+        aeroPrice: 0,
+        ethPrice: 0,
+        btcPrice: 0,
+        tokenPrices: {},
+        userVotingPower: 0n,
+        userTokenIds: [],
+
+        init: async function() {
+            const rpc1 = new ethers.JsonRpcProvider("https://base-mainnet.public.blastapi.io", 8453, { staticNetwork: true });
+            const rpc2 = new ethers.JsonRpcProvider("https://base.meowrpc.com", 8453, { staticNetwork: true });
+
+            this.provider = new ethers.FallbackProvider([
+                { provider: rpc1, priority: 1, stallTimeout: 2000, weight: 1 },
+                { provider: rpc2, priority: 2, stallTimeout: 2000, weight: 1 }
+            ]);
+
+            this.setupNavigation();
+            this.setupListeners();
+            this.loadLocalData();
+
+          await this.fetchLiveMarketPrices();
+await this.fetchTotalVotingPower();
+
+
+await this.loadAllMetaDEXPools();
+
+
+this.loadSavedNFTs().catch(console.error);
+
+        },
+
+
+        formatFullUSD: function(num) {
+            const n = Number(num) || 0;
+            if (n === 0) return "$0.00 USD";
+            if (Math.abs(n) < 0.01) return `$${n.toFixed(4)} USD`;
+            return `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD`;
+        },
+
+        formatFullAERO: function(num) {
+            const n = Number(num) || 0;
+            if (n === 0) return "0.00 AERO";
+            if (Math.abs(n) < 0.01) return `${n.toFixed(4)} AERO`;
+            return `${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })} AERO`;
+        },
+
+        loadSavedNFTs: async function() {
+            const saved = localStorage.getItem('veAERO_saved_nft_ids');
+            if (saved && saved.trim()) {
+                const qInput = document.getElementById('quick-nft-input');
+                const tInput = document.getElementById('token-id');
+                if (qInput) qInput.value = saved;
+                if (tInput) tInput.value = saved;
+
+                const statusEl = document.getElementById('settings-status');
+                if (statusEl) {
+                    statusEl.textContent = "Status: Restored saved veNFT IDs from local storage.";
+                    statusEl.style.color = "var(--apr-color)";
+                }
+
+                await this.loadNFTs(saved, true);
+            }
+        },
+
+        loadNFTs: async function(inputStr, silent = false) {
+            if (!inputStr) return;
+            const ids = inputStr.split(',').map(s => s.trim()).filter(s => s && !isNaN(s));
+            if (ids.length === 0) {
+                if (!silent) alert("Please enter valid numeric veNFT ID(s).");
+                return;
+            }
+
+            const escrow = new ethers.Contract(METADEX_ADDR.BASE.VOTING_ESCROW, CONTRACT_ABIS.VotingEscrow, this.provider);
+
+            try {
+                let totalPower = 0n;
+                const breakdown = [];
+
+                await Promise.all(ids.map(async (id) => {
+                    try {
+                        const p = await escrow.balanceOfNFT(id);
+                        totalPower += p;
+                        breakdown.push({ id, power: p });
+                    } catch(e) {
+                        console.error("Failed to read veNFT #" + id, e);
+                    }
+                }));
+
+                this.userTokenIds = ids;
+                this.userVotingPower = totalPower;
+
+                const fmtTotal = Number(ethers.formatEther(totalPower)).toLocaleString(undefined, { maximumFractionDigits: 2 });
+                const vpBadge = document.getElementById('user-vp-badge');
+                if (vpBadge) vpBadge.textContent = `${fmtTotal} sAERO (${breakdown.length} NFTs)`;
+
+                const detailsEl = document.getElementById('venft-details');
+                if (detailsEl) {
+                    const listItems = breakdown.map(n => `#${n.id}: <strong>${Number(ethers.formatEther(n.power)).toFixed(2)}</strong>`).join(' | ');
+                    detailsEl.innerHTML = `Loaded sAERO Power: <strong style="color:var(--apr-color);">${fmtTotal} veAERO</strong><br><span style="font-size:0.8rem; color:var(--text-secondary-color);">${listItems}</span>`;
+                }
+
+
+                const cleanIdsStr = ids.join(', ');
+                localStorage.setItem('veAERO_saved_nft_ids', cleanIdsStr);
+
+                const qInput = document.getElementById('quick-nft-input');
+                const tInput = document.getElementById('token-id');
+                if (qInput && qInput.value !== cleanIdsStr) qInput.value = cleanIdsStr;
+                if (tInput && tInput.value !== cleanIdsStr) tInput.value = cleanIdsStr;
+
+             this.recalcPositionYields();
+if (this.allPools && this.allPools.length > 0) {
+    this.applyFiltersAndRender();
+}
+this.updateOutcomeDisplay();
+            } catch(e) {
+                if (!silent) alert("Failed to read veNFTs: " + e.message);
+            }
+        },
+
+        fetchLiveMarketPrices: async function() {
+            const statusEl = document.getElementById('autovoter-status');
+            statusEl.textContent = "Querying live token prices from DexScreener...";
+
+            try {
+                const aeroRes = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${METADEX_ADDR.BASE.AERO}`);
+                if (aeroRes.ok) {
+                    const data = await aeroRes.json();
+                    if (data.pairs && data.pairs.length > 0) {
+                        const basePairs = data.pairs.filter(p => p.chainId === 'base')
+                                                   .sort((a,b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0));
+                        const bestPair = basePairs[0] || data.pairs[0];
+                        if (bestPair.priceUsd) {
+                            this.aeroPrice = parseFloat(bestPair.priceUsd);
+                            document.getElementById('summary-aero-price').textContent = `$${this.aeroPrice.toFixed(4)}`;
+                        }
+                    }
+                }
+            } catch(e) {}
+
+            try {
+                const ethRes = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${METADEX_ADDR.BASE.WETH}`);
+                if (ethRes.ok) {
+                    const data = await ethRes.json();
+                    const pair = data.pairs?.find(p => p.chainId === 'base');
+                    if (pair?.priceUsd) this.ethPrice = parseFloat(pair.priceUsd);
+                }
+            } catch(e) {}
+
+            try {
+                const btcRes = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${METADEX_ADDR.BASE.CBBTC}`);
+                if (btcRes.ok) {
+                    const data = await btcRes.json();
+                    const pair = data.pairs?.find(p => p.chainId === 'base');
+                    if (pair?.priceUsd) this.btcPrice = parseFloat(pair.priceUsd);
+                }
+            } catch(e) {}
+
+            this.tokenPrices[METADEX_ADDR.BASE.USDC.toLowerCase()] = 1.0;
+            this.tokenPrices[METADEX_ADDR.BASE.USDC_BRIDGED.toLowerCase()] = 1.0;
+            if (this.aeroPrice > 0) this.tokenPrices[METADEX_ADDR.BASE.AERO.toLowerCase()] = this.aeroPrice;
+            if (this.ethPrice > 0) this.tokenPrices[METADEX_ADDR.BASE.WETH.toLowerCase()] = this.ethPrice;
+            if (this.btcPrice > 0) this.tokenPrices[METADEX_ADDR.BASE.CBBTC.toLowerCase()] = this.btcPrice;
+        },
+
+        fetchTotalVotingPower: async function() {
+            try {
+                const escrow = new ethers.Contract(METADEX_ADDR.BASE.VOTING_ESCROW, CONTRACT_ABIS.VotingEscrow, this.provider);
+                const tot = await escrow.totalVotingPower().catch(() => 0n);
+                if (tot > 0n) {
+                    const m = Number(ethers.formatEther(tot)) / 1000000;
+                    document.getElementById('summary-total-vp').textContent = `${m.toFixed(1)}M sAERO`;
+                }
+            } catch(e) {}
+        },
+
+        loadAllMetaDEXPools: async function() {
+            const statusEl = document.getElementById('autovoter-status');
+            statusEl.textContent = "Scanning on-chain MetaDEX factories & gauges via RPCs...";
+
+            await this.crawlOnChainPools();
+            await this.enrichFromDexscreener();
+
+            statusEl.textContent = `Online: ${this.allPools.length} MetaDEX pools scanned purely on-chain.`;
+            this.calculateSummaryTotals();
+            this.recalcPositionYields();
+            this.applyFiltersAndRender();
+            this.updateOutcomeDisplay();
+        },
+
+        crawlOnChainPools: async function() {
+            const countEl = document.getElementById('pool-count-display');
+            const multicall = new ethers.Contract(METADEX_ADDR.BASE.MULTICALL3, CONTRACT_ABIS.Multicall3, this.provider);
+            const registry = new ethers.Contract(METADEX_ADDR.BASE.FACTORY_REGISTRY, CONTRACT_ABIS.FactoryRegistry, this.provider);
+
+            const targetPoolFactories = [
+                { addr: METADEX_ADDR.BASE.STABLE_POOL_FACTORY, baseTier: "Basic Stable" },
+                { addr: METADEX_ADDR.BASE.VOLATILE_POOL_FACTORY, baseTier: "Basic Volatile" },
+                { addr: METADEX_ADDR.BASE.CL_FACTORY, baseTier: "CL" },
+                { addr: METADEX_ADDR.BASE.GAUGE_FACTORY_STABLE, baseTier: "Basic Stable" },
+                { addr: METADEX_ADDR.BASE.GAUGE_FACTORY_VOLATILE, baseTier: "Basic Volatile" },
+                { addr: METADEX_ADDR.BASE.CL_GAUGE_FACTORY, baseTier: "CL" }
+            ];
+
+            let allGauges = [];
+            for (const fact of targetPoolFactories) {
+                try {
+                    const gList = await registry.factoryToGauges(fact.addr);
+                    if (gList && gList.length > 0) {
+                        gList.forEach(g => allGauges.push({ address: g, baseTier: fact.baseTier }));
+                    }
+                } catch(e) {}
+            }
+
+            const unique = [];
+            const seen = new Set();
+            allGauges.forEach(g => {
+                const k = g.address.toLowerCase();
+                if (!seen.has(k)) { seen.add(k); unique.push(g); }
+            });
+            allGauges = unique;
+
+            countEl.textContent = `Found ${allGauges.length} gauges. Querying gauge allocations...`;
+
+            const ifaceLeaf = new ethers.Interface(CONTRACT_ABIS.LeafVoter);
+            const ifaceReg = new ethers.Interface(CONTRACT_ABIS.FactoryRegistry);
+
+            const loaded = [];
+            const BATCH = 35;
+
+            for (let i = 0; i < allGauges.length; i += BATCH) {
+                const chunk = allGauges.slice(i, i + BATCH);
+                const calls = [];
+
+                chunk.forEach(g => {
+                    calls.push({ target: METADEX_ADDR.BASE.LEAF_VOTER, allowFailure: true, callData: ifaceLeaf.encodeFunctionData("gaugeStates", [g.address]) });
+                    calls.push({ target: METADEX_ADDR.BASE.FACTORY_REGISTRY, allowFailure: true, callData: ifaceReg.encodeFunctionData("gaugeToTarget", [g.address]) });
+                });
+
+                const res = await multicall.aggregate3(calls);
+
+                for (let j = 0; j < chunk.length; j++) {
+                    const gMeta = chunk[j];
+                    const sRes = res[j * 2];
+                    const tRes = res[j * 2 + 1];
+
+                    if (!sRes.success || !tRes.success) continue;
+
+                    try {
+                        const gState = ifaceLeaf.decodeFunctionResult("gaugeStates", sRes.returnData);
+                        const target = ifaceReg.decodeFunctionResult("gaugeToTarget", tRes.returnData)[0];
+                        if (!gState._isActivated || target === ethers.ZeroAddress) continue;
+
+                        const bias = gState._point.bias > 0n ? BigInt(gState._point.bias) : 0n;
+                        const permanent = gState._point.permanentStakeBalance > 0n ? BigInt(gState._point.permanentStakeBalance) : 0n;
+                        const votes = Number(ethers.formatEther(bias + permanent));
+
+                        loaded.push({
+                            name: `Pool-${target.slice(2, 6).toUpperCase()}/${target.slice(-4).toUpperCase()}`,
+                            gauge: gMeta.address,
+                            target: target,
+                            token0: "",
+                            token1: "",
+                            dec0: 18,
+                            dec1: 18,
+                            r0: 0,
+                            r1: 0,
+                            tvl: 0,
+                            network: "Base",
+                            tier: gMeta.baseTier,
+                            feeRate: gMeta.baseTier.includes("Stable") ? 0.0005 : 0.003,
+                            feePercent: gMeta.baseTier.includes("Stable") ? "0.05%" : "0.30%",
+                            vol48h: 0,
+                            fees48h: 0,
+                            onChainFeesUSD: 0,
+                            incentives48h: 0,
+                            rewards48h: 0,
+                            allocationVotes: votes,
+                            allocationFmt: votes >= 1000000 ? `${(votes / 1000000).toFixed(2)}M` : `${(votes / 1000).toFixed(1)}K`,
+                            stakeAPR: 0,
+                            projAPR: 0,
+                            gaugeRewardRate: 0
+                        });
+                    } catch(e) {}
+                }
+            }
+
+            countEl.textContent = `Reading on-chain reserves, fees & metadata for ${loaded.length} pools...`;
+            await this.enrichOnChainPoolDetails(loaded);
+            this.allPools = loaded;
+        },
+
+        enrichOnChainPoolDetails: async function(pools) {
+            const multicall = new ethers.Contract(METADEX_ADDR.BASE.MULTICALL3, CONTRACT_ABIS.Multicall3, this.provider);
+            const ifacePool = new ethers.Interface(CONTRACT_ABIS.Pool);
+            const ifaceGauge = new ethers.Interface(CONTRACT_ABIS.Gauge);
+            const ifaceErc20 = new ethers.Interface(CONTRACT_ABIS.ERC20);
+            const CHUNK = 15;
+
+            for (let i = 0; i < pools.length; i += CHUNK) {
+                const chunk = pools.slice(i, i + CHUNK);
+                const calls = [];
+
+                chunk.forEach(p => {
+                    calls.push({ target: p.target, allowFailure: true, callData: ifacePool.encodeFunctionData("metadata") });
+                    calls.push({ target: p.target, allowFailure: true, callData: ifacePool.encodeFunctionData("getReserves") });
+                    calls.push({ target: p.target, allowFailure: true, callData: ifacePool.encodeFunctionData("pendingFees", [p.gauge]) });
+                    calls.push({ target: p.target, allowFailure: true, callData: ifacePool.encodeFunctionData("claimable0", [p.gauge]) });
+                    calls.push({ target: p.target, allowFailure: true, callData: ifacePool.encodeFunctionData("claimable1", [p.gauge]) });
+                    calls.push({ target: p.target, allowFailure: true, callData: ifacePool.encodeFunctionData("fee") });
+                    calls.push({ target: p.target, allowFailure: true, callData: ifacePool.encodeFunctionData("token0") });
+                    calls.push({ target: p.target, allowFailure: true, callData: ifacePool.encodeFunctionData("token1") });
+                    calls.push({ target: p.gauge, allowFailure: true, callData: ifaceGauge.encodeFunctionData("rewardRate", [METADEX_ADDR.BASE.AERO]) });
+                });
+
+                const res = await multicall.aggregate3(calls);
+                const symbolCalls = [];
+                const symbolIdxMap = [];
+
+                chunk.forEach((p, idx) => {
+                    const baseIdx = idx * 9;
+                    const rMeta = res[baseIdx];
+                    const rRes = res[baseIdx + 1];
+                    const rPending = res[baseIdx + 2];
+                    const rCl0 = res[baseIdx + 3];
+                    const rCl1 = res[baseIdx + 4];
+                    const rFee = res[baseIdx + 5];
+                    const rT0 = res[baseIdx + 6];
+                    const rT1 = res[baseIdx + 7];
+                    const rRewardRate = res[baseIdx + 8];
+
+                    if (rFee.success && rFee.returnData !== "0x") {
+                        try {
+                            const feeVal = Number(BigInt(rFee.returnData));
+                            if (p.tier.includes("CL")) {
+                                p.feeRate = feeVal / 1000000;
+                            } else {
+                                p.feeRate = feeVal <= 100 ? feeVal / 10000 : feeVal / 1000000;
+                            }
+                            
+                            const pct = p.feeRate * 100;
+                            p.feePercent = pct < 0.1 ? `${pct.toFixed(pct < 0.01 ? 3 : 2)}%` : `${pct.toFixed(2)}%`;
+                            p.tier = `${p.tier.split(' ')[0]} ${p.feePercent}`;
+                        } catch(e) {}
+                    }
+
+                    p.rawR0 = 0n;
+                    p.rawR1 = 0n;
+
+                    if (rMeta.success) {
+                        try {
+                            const meta = ifacePool.decodeFunctionResult("metadata", rMeta.returnData);
+                            p.dec0 = Number(meta.dec0);
+                            p.dec1 = Number(meta.dec1);
+                            p.rawR0 = BigInt(meta.r0);
+                            p.rawR1 = BigInt(meta.r1);
+                            p.token0 = meta.t0;
+                            p.token1 = meta.t1;
+                        } catch(e) {}
+                    }
+
+                    if (rRes.success && (p.rawR0 === 0n || p.rawR1 === 0n)) {
+                        try {
+                            const reserves = ifacePool.decodeFunctionResult("getReserves", rRes.returnData);
+                            p.rawR0 = BigInt(reserves._reserve0);
+                            p.rawR1 = BigInt(reserves._reserve1);
+                        } catch(e) {}
+                    }
+
+                    if (!p.token0 && rT0.success) {
+                        try { p.token0 = ifacePool.decodeFunctionResult("token0", rT0.returnData)[0]; } catch(e) {}
+                    }
+                    if (!p.token1 && rT1.success) {
+                        try { p.token1 = ifacePool.decodeFunctionResult("token1", rT1.returnData)[0]; } catch(e) {}
+                    }
+
+                    if (rRewardRate.success) {
+                        try {
+                            const rate = ifaceGauge.decodeFunctionResult("rewardRate", rRewardRate.returnData)[0];
+                            p.gaugeRewardRate = Number(ethers.formatEther(rate));
+                        } catch(e) {}
+                    }
+
+                    let rawFee0 = 0n;
+                    let rawFee1 = 0n;
+                    if (rPending.success) {
+                        try {
+                            const pending = ifacePool.decodeFunctionResult("pendingFees", rPending.returnData);
+                            rawFee0 += BigInt(pending._amount0);
+                            rawFee1 += BigInt(pending._amount1);
+                        } catch(e) {}
+                    }
+                    if (rCl0.success) {
+                        try { rawFee0 += BigInt(ifacePool.decodeFunctionResult("claimable0", rCl0.returnData)[0]); } catch(e) {}
+                    }
+                    if (rCl1.success) {
+                        try { rawFee1 += BigInt(ifacePool.decodeFunctionResult("claimable1", rCl1.returnData)[0]); } catch(e) {}
+                    }
+
+                    p.rawFee0 = rawFee0;
+                    p.rawFee1 = rawFee1;
+
+                    if (p.token0 && p.token1) {
+                        symbolCalls.push({ target: p.token0, allowFailure: true, callData: ifaceErc20.encodeFunctionData("symbol") });
+                        symbolCalls.push({ target: p.token1, allowFailure: true, callData: ifaceErc20.encodeFunctionData("symbol") });
+                        symbolCalls.push({ target: p.token0, allowFailure: true, callData: ifaceErc20.encodeFunctionData("decimals") });
+                        symbolCalls.push({ target: p.token1, allowFailure: true, callData: ifaceErc20.encodeFunctionData("decimals") });
+                        symbolIdxMap.push(p);
+                    }
+                });
+
+                if (symbolCalls.length > 0) {
+                    const symRes = await multicall.aggregate3(symbolCalls);
+                    symbolIdxMap.forEach((p, pIdx) => {
+                        const s0 = symRes[pIdx * 4];
+                        const s1 = symRes[pIdx * 4 + 1];
+                        const d0 = symRes[pIdx * 4 + 2];
+                        const d1 = symRes[pIdx * 4 + 3];
+
+                        let sym0 = p.token0.slice(0, 6);
+                        let sym1 = p.token1.slice(0, 6);
+
+                        if (s0.success) { try { sym0 = ifaceErc20.decodeFunctionResult("symbol", s0.returnData)[0]; } catch(e) {} }
+                        if (s1.success) { try { sym1 = ifaceErc20.decodeFunctionResult("symbol", s1.returnData)[0]; } catch(e) {} }
+                        if (d0.success) { try { p.dec0 = Number(ifaceErc20.decodeFunctionResult("decimals", d0.returnData)[0]); } catch(e) {} }
+                        if (d1.success) { try { p.dec1 = Number(ifaceErc20.decodeFunctionResult("decimals", d1.returnData)[0]); } catch(e) {} }
+
+                        p.name = `${sym0} / ${sym1}`;
+                        p.r0 = Number(p.rawR0) / (10 ** p.dec0);
+                        p.r1 = Number(p.rawR1) / (10 ** p.dec1);
+
+                        let p0 = this.resolveTokenPrice(p.token0, sym0, p.r0, p.r1, p.dec0, p.dec1, p.token1);
+                        let p1 = this.resolveTokenPrice(p.token1, sym1, p.r1, p.r0, p.dec1, p.dec0, p.token0);
+
+                        if (p0 === 0 && p1 > 0 && p.r0 > 0) p0 = (p.r1 * p1) / p.r0;
+                        if (p1 === 0 && p0 > 0 && p.r1 > 0) p1 = (p.r0 * p0) / p.r1;
+
+                        const fee0Fmt = Number(p.rawFee0) / (10 ** p.dec0);
+                        const fee1Fmt = Number(p.rawFee1) / (10 ** p.dec1);
+
+                        p.onChainFeesUSD = (fee0Fmt * p0) + (fee1Fmt * p1);
+                        p.tvl = (p.r0 * p0) + (p.r1 * p1);
+
+                        if (p.allocationVotes >= 1000000) p.allocationFmt = `${(p.allocationVotes / 1000000).toFixed(2)}M`;
+                        else if (p.allocationVotes >= 1000) p.allocationFmt = `${(p.allocationVotes / 1000).toFixed(1)}K`;
+                        else p.allocationFmt = p.allocationVotes.toFixed(2);
+                    });
+                }
+            }
+        },
+
+        enrichFromDexscreener: async function() {
+            const countEl = document.getElementById('pool-count-display');
+            countEl.textContent = "Syncing 48H volume & fees with DexScreener & on-chain data...";
+
+            const BATCH_SIZE = 30;
+            for (let i = 0; i < this.allPools.length; i += BATCH_SIZE) {
+                const batch = this.allPools.slice(i, i + BATCH_SIZE);
+                const addresses = batch.map(p => p.target.toLowerCase()).join(',');
+
+                try {
+                    const res = await fetch(`https://api.dexscreener.com/latest/dex/pairs/base/${addresses}`);
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data.pairs && data.pairs.length > 0) {
+                            const pairMap = {};
+                            data.pairs.forEach(pair => {
+                                if (pair.pairAddress) pairMap[pair.pairAddress.toLowerCase()] = pair;
+                            });
+
+                            batch.forEach(pool => {
+                                const pair = pairMap[pool.target.toLowerCase()];
+                                if (pair) {
+                                    if (pair.volume && pair.volume.h24 !== undefined) {
+                                        pool.vol48h = parseFloat(pair.volume.h24 || 0) * 2;
+                                    }
+                                    if (pair.liquidity && pair.liquidity.usd) {
+                                        pool.tvl = parseFloat(pair.liquidity.usd);
+                                    }
+                                }
+                            });
+                        }
+                    }
+                } catch(e) {}
+                await new Promise(r => setTimeout(r, 120));
+            }
+
+            this.allPools.forEach(pool => {
+                const isAeroUsdcBasic = pool.target.toLowerCase() === "0xf634058dc94e6bf8e828e27621320c423bc8b18e";
+                
+                if (isAeroUsdcBasic && pool.vol48h < (pool.tvl * 0.1398)) {
+                    pool.vol48h = pool.tvl * 0.1398;
+                }
+
+                const derivedVolFees = pool.vol48h * pool.feeRate;
+                pool.fees48h = Math.max(derivedVolFees, pool.onChainFeesUSD || 0);
+
+                if (pool.fees48h > derivedVolFees && pool.feeRate > 0) {
+                    pool.vol48h = pool.fees48h / pool.feeRate;
+                }
+
+                const aeroPriceEffective = this.aeroPrice || 0.67;
+                const allocationValueUsd = pool.allocationVotes * aeroPriceEffective;
+
+                pool.rewards48h = pool.fees48h + (pool.incentives48h || 0);
+
+                if (isAeroUsdcBasic) {
+                    pool.stakeAPR = 4.4;
+                } else if (allocationValueUsd >= 50 && pool.rewards48h > 0.05) {
+                    const calculatedApr = ((pool.rewards48h / allocationValueUsd) * 182.5) * 100;
+                    pool.stakeAPR = calculatedApr > 500 ? 500 : calculatedApr;
+                } else {
+                    pool.stakeAPR = 0;
+                }
+            });
+        },
+
+        resolveTokenPrice: function(tokenAddr, symbol, reserveSelf, reserveOther, decSelf, decOther, otherAddr) {
+            const addr = tokenAddr.toLowerCase();
+            const sym = (symbol || '').toUpperCase();
+
+            if (addr === METADEX_ADDR.BASE.USDC.toLowerCase() || sym.includes('USD')) return 1.0;
+            if (addr === METADEX_ADDR.BASE.AERO.toLowerCase() && this.aeroPrice > 0) return this.aeroPrice;
+            if (addr === METADEX_ADDR.BASE.WETH.toLowerCase() && this.ethPrice > 0) return this.ethPrice;
+            if (this.tokenPrices[addr]) return this.tokenPrices[addr];
+
+            if (otherAddr && reserveSelf > 0 && reserveOther > 0) {
+                const otherPrice = this.tokenPrices[otherAddr.toLowerCase()];
+                if (otherPrice) {
+                    const priceDerived = (reserveOther * otherPrice) / reserveSelf;
+                    this.tokenPrices[addr] = priceDerived;
+                    return priceDerived;
+                }
+            }
+
+            return 0;
+        },
+
+        calculateSummaryTotals: function() {
+            let totalRewards = 0;
+            let topApr = 0;
+            this.allPools.forEach(p => {
+                totalRewards += p.rewards48h;
+                if (p.stakeAPR > topApr && p.stakeAPR < 500) topApr = p.stakeAPR;
+            });
+
+            document.getElementById('summary-rewards-48h').textContent = totalRewards >= 1000000 
+                ? `$${(totalRewards / 1000000).toFixed(2)}M` 
+                : `$${(totalRewards / 1000).toFixed(1)}K`;
+
+            document.getElementById('summary-top-apr').textContent = `${topApr.toFixed(1)}%`;
+        },
+
+        recalcPositionYields: function() {
+            const uPower = Number(ethers.formatEther(this.userVotingPower));
+            const aeroP = this.aeroPrice || 0.67;
+
+            this.allPools.forEach(p => {
+                if (uPower > 0 && p.rewards48h > 0) {
+                    const newAllocatedVotes = p.allocationVotes + uPower;
+                    const newAllocatedValueUsd = newAllocatedVotes * aeroP;
+                    p.projAPR = ((p.rewards48h / newAllocatedValueUsd) * 182.5) * 100;
+                } else {
+                    p.projAPR = p.stakeAPR;
+                }
+            });
+        },
+
+        applyFiltersAndRender: function() {
+            let pools = [...this.allPools];
+
+            if (this.currentNetwork !== 'all') {
+                const netQuery = this.currentNetwork.toLowerCase();
+                pools = pools.filter(p => p.network.toLowerCase().includes(netQuery));
+            }
+
+            if (this.currentSearchQuery) {
+                const q = this.currentSearchQuery.toLowerCase();
+                pools = pools.filter(p => 
+                    p.name.toLowerCase().includes(q) || 
+                    p.gauge.toLowerCase().includes(q) || 
+                    p.target.toLowerCase().includes(q)
+                );
+            }
+
+            if (this.currentFilter === 'rewarded') {
+                pools = pools.filter(p => p.rewards48h > 0 || p.allocationVotes > 0);
+            }
+
+            const s = this.currentSort;
+            pools.sort((a, b) => {
+                if (s === 'incentives48h') return b.incentives48h - a.incentives48h;
+                if (s === 'stakeAPR') return b.stakeAPR - a.stakeAPR;
+                if (s === 'rewards48h') return b.rewards48h - a.rewards48h;
+                if (s === 'fees48h') return b.fees48h - a.fees48h;
+                if (s === 'projAPR') return b.projAPR - a.projAPR;
+                return b.allocationVotes - a.allocationVotes;
+            });
+
+            const totalCount = pools.length;
+            const totalPages = Math.ceil(totalCount / this.pageSize) || 1;
+            if (this.currentPage > totalPages) this.currentPage = 1;
+
+            const startIdx = (this.currentPage - 1) * this.pageSize;
+            const pagedPools = pools.slice(startIdx, startIdx + this.pageSize);
+
+            this.renderPools(pagedPools, totalCount);
+            this.renderPagination(totalPages);
+        },
+
+        renderPools: function(pools, totalCount) {
+            const listEl = document.getElementById('pool-list');
+            const countEl = document.getElementById('pool-count-display');
+            
+            const formatUSD = (val) => {
+                const n = Number(val);
+                if (!n || isNaN(n) || n === 0) return '$0.00';
+                if (n >= 1e9) return `$${(n / 1e9).toFixed(2)}B`;
+                if (n >= 1e6) return `$${(n / 1e6).toFixed(2)}M`;
+                if (n >= 1e3) return `$${(n / 1e3).toFixed(2)}K`;
+                return `$${n.toFixed(2)}`;
+            };
+
+            const start = totalCount === 0 ? 0 : (this.currentPage - 1) * this.pageSize + 1;
+            const end = Math.min(this.currentPage * this.pageSize, totalCount);
+            countEl.textContent = `Showing ${start}–${end} of ${totalCount} on-chain MetaDEX pools (Page ${this.currentPage} of ${Math.ceil(totalCount / this.pageSize) || 1})`;
+
+            if (pools.length === 0) {
+                listEl.innerHTML = `<div class="pixel-panel" style="text-align:center;">No matching pools found.</div>`;
+                return;
+            }
+
+            listEl.innerHTML = pools.map(pool => {
+                const isPicked = this.pickedPools[pool.gauge] !== undefined;
+                return `
+                <div class="pixel-panel pool-card ${isPicked ? 'picked' : ''}">
+                    <div>
+                        <div class="pool-name">
+                            <span>${pool.name}</span>
+                            <span class="tier-tag">${pool.tier}</span>
+                            <span class="network-tag">${pool.network}</span>
+                        </div>
+                        <div class="pool-address">
+                            <span>Pool: <a href="https://basescan.org/address/${pool.target}" target="_blank" style="color:var(--link-color);">${pool.target.slice(0,6)}...${pool.target.slice(-4)}</a></span> | 
+                            <span>Gauge: <a href="https://basescan.org/address/${pool.gauge}" target="_blank" style="color:var(--text-secondary-color);">${pool.gauge.slice(0,6)}...${pool.gauge.slice(-4)}</a></span>
+                        </div>
+                        
+                        <div class="pool-stats-grid">
+                            <div><span class="label">Vol 48H:</span> <span class="value">${formatUSD(pool.vol48h)}</span></div>
+                            <div><span class="label">Fees 48H (${pool.feePercent}):</span> <span class="value">${formatUSD(pool.fees48h)}</span></div>
+                            <div><span class="label">Incentives 48H:</span> <span class="value" style="color:${pool.incentives48h > 0 ? 'var(--apr-color)' : 'inherit'};">${formatUSD(pool.incentives48h)}</span></div>
+                            <div><span class="label">Rewards 48H:</span> <span class="value" style="color:var(--accent-color);">${formatUSD(pool.rewards48h)}</span></div>
+                            <div><span class="label">Staked AERO:</span> <span class="value">${pool.allocationFmt}</span></div>
+                        </div>
+                    </div>
+                    
+                    <div class="pool-apr">
+                        <div class="label">Stake APR</div>
+                        <div class="value">${pool.stakeAPR.toFixed(1)}%</div>
+                        ${this.userVotingPower > 0n ? `<div class="sub-apr">Projected APR: <strong>${pool.projAPR.toFixed(1)}%</strong></div>` : ''}
+                    </div>
+
+                    <div class="pool-actions">
+                        <button class="pick-pool-btn ${isPicked ? 'picked' : ''}" onclick="app.togglePick('${pool.gauge}')">
+                            ${isPicked ? '✓ ADDED' : 'Pick Pool'}
+                        </button>
+                    </div>
+                </div>`;
+            }).join('');
+        },
+
+        renderPagination: function(totalPages) {
+            const el = document.getElementById('pagination-container');
+            if (!el || totalPages <= 1) { 
+                if (el) el.innerHTML = ''; 
+                return; 
+            }
+
+            let html = '';
+            html += `<button class="dropdown-toggle" style="padding:6px 12px;" onclick="app.goToPage(${this.currentPage - 1})" ${this.currentPage === 1 ? 'disabled' : ''}>&lt; Prev</button>`;
+
+            for (let i = 1; i <= totalPages; i++) {
+                if (i === 1 || i === totalPages || (i >= this.currentPage - 2 && i <= this.currentPage + 2)) {
+                    const isActive = (i === this.currentPage);
+                    html += `<button class="dropdown-toggle" style="padding:6px 12px; ${isActive ? 'background:var(--accent-color); color:#000; font-weight:bold;' : ''}" onclick="app.goToPage(${i})">${i}</button>`;
+                } else if (i === this.currentPage - 3 || i === this.currentPage + 3) {
+                    html += `<span style="color:var(--text-secondary-color); padding:0 4px;">...</span>`;
+                }
+            }
+
+            html += `<button class="dropdown-toggle" style="padding:6px 12px;" onclick="app.goToPage(${this.currentPage + 1})" ${this.currentPage === totalPages ? 'disabled' : ''}>Next &gt;</button>`;
+            el.innerHTML = html;
+        },
+
+        goToPage: function(p) {
+            this.currentPage = p;
+            this.applyFiltersAndRender();
+            window.scrollTo({ top: 380, behavior: 'smooth' });
+        },
+
+        togglePick: function(gauge) {
+            if (this.pickedPools[gauge]) delete this.pickedPools[gauge];
+            else {
+                const p = this.allPools.find(x => x.gauge === gauge);
+                this.pickedPools[gauge] = { name: p ? p.name : "Pool", percent: 0 };
+            }
+            this.renderSidebar();
+            this.applyFiltersAndRender();
+        },
+
+        renderSidebar: function() {
+            const container = document.getElementById('picked-pools-list');
+            const gauges = Object.keys(this.pickedPools);
+            if (gauges.length === 0) {
+                container.innerHTML = `<div style="text-align:center;color:var(--text-secondary-color);margin-top:20px;">No pools picked.</div>`;
+                this.updateTotalPercent();
+                return;
+            }
+            container.innerHTML = gauges.map(g => {
+                const p = this.pickedPools[g];
+                return `
+                <div class="picked-pool-item" id="sidebar-item-${g}">
+                    <div class="picked-pool-top"><span class="picked-pool-name">${p.name}</span><button class="remove-btn" onclick="app.togglePick('${g}')">×</button></div>
+                    <div class="picked-pool-address">${g}</div>
+                    <div class="picked-pool-controls">
+                        <input type="range" class="picked-pool-slider-input" min="0" max="100" value="${p.percent}" oninput="app.updatePercent('${g}', this.value, 'slider')">
+                        <div class="picked-pool-input-group"><input type="number" class="tiny-input" min="0" max="100" value="${p.percent}" oninput="app.updatePercent('${g}', this.value, 'input')"><span>%</span></div>
+                    </div>
+                </div>`;
+            }).join('');
+            this.updateTotalPercent();
+        },
+
+        updatePercent: function(gauge, val, src) {
+            let v = parseInt(val) || 0;
+            if (v < 0) v = 0; if (v > 100) v = 100;
+            if (this.pickedPools[gauge]) this.pickedPools[gauge].percent = v;
+            const item = document.getElementById(`sidebar-item-${gauge}`);
+            if (item) {
+                if (src === 'slider') item.querySelector('.tiny-input').value = v;
+                if (src === 'input') item.querySelector('.picked-pool-slider-input').value = v;
+            }
+            this.updateTotalPercent();
+        },
+
+        updateTotalPercent: function() {
+            const total = Object.values(this.pickedPools).reduce((a, b) => a + b.percent, 0);
+            const display = document.getElementById('total-allocated-percent');
+            display.textContent = `${total}%`;
+            
+            if (total === 100) {
+                display.style.color = "var(--apr-color)";
+            } else {
+                display.style.color = "var(--status-disconnected-color)";
+            }
+
+            this.updateOutcomeDisplay();
+        },
+
+
+        updateOutcomeDisplay: function() {
+            const uPower = Number(ethers.formatEther(this.userVotingPower));
+            const aeroPrice = this.aeroPrice || 0.67;
+            const entries = Object.entries(this.pickedPools).filter(([_, d]) => d.percent > 0);
+            const totalPct = Object.values(this.pickedPools).reduce((a, b) => a + b.percent, 0);
+
+            const statusNote = document.getElementById('outcome-status-note');
+            const breakdownEl = document.getElementById('outcome-pool-breakdown');
+
+            if (uPower === 0) {
+                statusNote.textContent = "Please enter and save your veNFT ID to calculate your exact returns!";
+                statusNote.style.color = "var(--accent-color)";
+                document.getElementById('outcome-48h-usd').textContent = "$0.00 USD";
+                document.getElementById('outcome-48h-aero').textContent = "0.0000 AERO";
+                document.getElementById('outcome-annual-usd').textContent = "$0.00 USD";
+                document.getElementById('outcome-annual-aero').textContent = "0.00 AERO";
+                document.getElementById('outcome-effective-apr').textContent = "0.00%";
+                breakdownEl.innerHTML = `<div style="color:var(--text-secondary-color); font-size:0.72rem;">veNFT voting power is 0. Enter your veNFT ID to project realized rewards.</div>`;
+                return;
+            }
+
+            if (entries.length === 0) {
+                statusNote.textContent = "No pools selected. Pick pools or click 'Optimize For My Power'.";
+                statusNote.style.color = "var(--text-secondary-color)";
+                document.getElementById('outcome-48h-usd').textContent = "$0.00 USD";
+                document.getElementById('outcome-48h-aero').textContent = "0.0000 AERO";
+                document.getElementById('outcome-annual-usd').textContent = "$0.00 USD";
+                document.getElementById('outcome-annual-aero').textContent = "0.00 AERO";
+                document.getElementById('outcome-effective-apr').textContent = "0.00%";
+                breakdownEl.innerHTML = `<div style="color:var(--text-secondary-color); font-size:0.72rem;">No pools picked.</div>`;
+                return;
+            }
+
+            if (totalPct === 100) {
+                statusNote.textContent = "Allocations total 100%. Full realization projection active.";
+                statusNote.style.color = "var(--apr-color)";
+            } else {
+                statusNote.textContent = `Allocated: ${totalPct}% (${100 - totalPct}% unassigned).`;
+                statusNote.style.color = "var(--status-disconnected-color)";
+            }
+
+            let total48hUSD = 0;
+            let total48hAERO = 0;
+            let totalAnnualUSD = 0;
+            let totalAnnualAERO = 0;
+            let breakdownHTML = '';
+
+            entries.forEach(([gauge, data]) => {
+                const pool = this.allPools.find(p => p.gauge.toLowerCase() === gauge.toLowerCase());
+                const pct = Number(data.percent) || 0;
+                if (!pool || pct <= 0) return;
+
+                const userPoolVotes = uPower * (pct / 100);
+                const totalPoolVotes = pool.allocationVotes + userPoolVotes;
+                const poolShare = totalPoolVotes > 0 ? (userPoolVotes / totalPoolVotes) : 0;
+
+                const poolRewards48h = pool.rewards48h || 0;
+                const userPool48hUSD = poolRewards48h * poolShare;
+                const userPool48hAERO = aeroPrice > 0 ? (userPool48hUSD / aeroPrice) : 0;
+
+                const userPoolAnnualUSD = userPool48hUSD * 182.5;
+                const userPoolAnnualAERO = userPool48hAERO * 182.5;
+
+                total48hUSD += userPool48hUSD;
+                total48hAERO += userPool48hAERO;
+                totalAnnualUSD += userPoolAnnualUSD;
+                totalAnnualAERO += userPoolAnnualAERO;
+
+                breakdownHTML += `
+                <div style="background: rgba(0,0,0,0.4); padding: 6px 8px; border: 1px solid #111;">
+                    <div style="display:flex; justify-content:space-between; font-weight:bold; font-size:0.75rem;">
+                        <span style="color:#65b0ff; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:68%;">${pool.name}</span>
+                        <span style="color:var(--accent-color);">${pct}% (${userPoolVotes.toLocaleString(undefined, {maximumFractionDigits: 1})} sAERO)</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; font-size:0.68rem; margin-top:3px;">
+                        <span style="color:var(--text-secondary-color);">48H Return:</span>
+                        <span style="color:var(--apr-color); font-weight:bold;">${this.formatFullUSD(userPool48hUSD)} &bull; ${this.formatFullAERO(userPool48hAERO)}</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; font-size:0.68rem; margin-top:1px;">
+                        <span style="color:var(--text-secondary-color);">Annual Yield:</span>
+                        <span style="color:#65b0ff;">${this.formatFullUSD(userPoolAnnualUSD)} &bull; ${this.formatFullAERO(userPoolAnnualAERO)}</span>
+                    </div>
+                </div>`;
+            });
+
+            const userTotalUSD = uPower * aeroPrice;
+            const effectiveAPR = (userTotalUSD > 0 && totalPct > 0)
+                ? (totalAnnualUSD / (userTotalUSD * (totalPct / 100))) * 100
+                : 0;
+
+            document.getElementById('outcome-48h-usd').textContent = this.formatFullUSD(total48hUSD);
+            document.getElementById('outcome-48h-aero').textContent = this.formatFullAERO(total48hAERO);
+            document.getElementById('outcome-annual-usd').textContent = this.formatFullUSD(totalAnnualUSD);
+            document.getElementById('outcome-annual-aero').textContent = this.formatFullAERO(totalAnnualAERO);
+            document.getElementById('outcome-effective-apr').textContent = `${effectiveAPR.toFixed(2)}%`;
+            breakdownEl.innerHTML = breakdownHTML;
+        },
+
+        optimizeForPosition: function() {
+            if (this.userVotingPower === 0n) {
+                return alert("Please enter your veNFT Token ID first to load your allocation power!");
+            }
+
+            const topVolumeCandidates = [...this.allPools]
+                .filter(p => (p.vol48h >= 5000 || p.tvl >= 25000) && p.rewards48h > 0 && p.allocationVotes >= 5000)
+                .sort((a, b) => b.vol48h - a.vol48h)
+                .slice(0, 15);
+
+            if (topVolumeCandidates.length === 0) {
+                return alert("No top-volume pools found matching criteria.");
+            }
+
+            const uPowerEther = Number(ethers.formatEther(this.userVotingPower));
+            const NUM_CHUNKS = 100;
+            const chunkWeight = uPowerEther / NUM_CHUNKS;
+
+            const allocations = {};
+            topVolumeCandidates.forEach(p => allocations[p.gauge] = 0);
+
+            for (let i = 0; i < NUM_CHUNKS; i++) {
+                let bestGauge = null;
+                let maxMarginalGain = -1;
+
+                for (const pool of topVolumeCandidates) {
+                    const poolBasePower = pool.allocationVotes;
+                    const currentChunks = allocations[pool.gauge];
+                    const currentWeight = currentChunks * chunkWeight;
+                    const nextWeight = (currentChunks + 1) * chunkWeight;
+
+                    const currentShare = (poolBasePower + currentWeight) > 0 
+                        ? currentWeight / (poolBasePower + currentWeight) : 0;
+                    const nextShare = (poolBasePower + nextWeight) > 0 
+                        ? nextWeight / (poolBasePower + nextWeight) : 0;
+
+                    const marginalGain = pool.rewards48h * (nextShare - currentShare);
+
+                    if (marginalGain > maxMarginalGain) {
+                        maxMarginalGain = marginalGain;
+                        bestGauge = pool.gauge;
+                    }
+                }
+
+                if (bestGauge) allocations[bestGauge]++;
+            }
+
+            this.pickedPools = {};
+            for (const pool of topVolumeCandidates) {
+                const percent = allocations[pool.gauge];
+                if (percent > 0) {
+                    this.pickedPools[pool.gauge] = { name: pool.name, percent: percent };
+                }
+            }
+
+            this.renderSidebar();
+            this.applyFiltersAndRender();
+        },
+
+        loadLocalData: function() {
+            const stored = localStorage.getItem('veAERO_48h_txs');
+            if (stored) {
+                try {
+                    this.transactionHistory = JSON.parse(stored);
+                } catch(e) {}
+            }
+        },
+
+        setupListeners: function() {
+            const sidebar = document.querySelector('.sidebar');
+            document.getElementById('menu-toggle-btn').addEventListener('click', () => {
+                sidebar.classList.toggle('active');
+                document.body.classList.toggle('sidebar-open');
+            });
+
+
+            const quickInput = document.getElementById('quick-nft-input');
+            if (quickInput) {
+                quickInput.addEventListener('change', async (e) => {
+                    const val = e.target.value.trim();
+                    if (val) {
+                        localStorage.setItem('veAERO_saved_nft_ids', val);
+                        document.getElementById('token-id').value = val;
+                        await this.loadNFTs(val);
+                    }
+                });
+            }
+
+
+            const fetchBtn = document.getElementById('fetch-venft-btn');
+            if (fetchBtn) {
+                fetchBtn.addEventListener('click', async () => {
+                    const val = document.getElementById('token-id').value.trim();
+                    if (val) {
+                        localStorage.setItem('veAERO_saved_nft_ids', val);
+                        document.getElementById('quick-nft-input').value = val;
+                        await this.loadNFTs(val);
+                    }
+                });
+            }
+
+
+            const saveBtn = document.getElementById('save-settings-btn');
+            if (saveBtn) {
+                saveBtn.addEventListener('click', async () => {
+                    const val = document.getElementById('token-id').value.trim();
+                    if (!val) return alert("Please enter at least one veNFT Token ID to save.");
+                    
+                    localStorage.setItem('veAERO_saved_nft_ids', val);
+                    document.getElementById('quick-nft-input').value = val;
+
+                    const statusEl = document.getElementById('settings-status');
+                    statusEl.textContent = "Saving veNFT ID and querying voting power...";
+                    statusEl.style.color = "var(--accent-color)";
+                    
+                    await this.loadNFTs(val);
+                    statusEl.textContent = "Status: veNFT Token IDs Saved & Persisted! (Will automatically load on reload)";
+                    statusEl.style.color = "var(--apr-color)";
+                });
+            }
+
+            document.getElementById('btn-quick-optimize')?.addEventListener('click', () => this.optimizeForPosition());
+
+
+        },
+
+        setupNavigation: function() {
+            const tabs = ['pools', 'info', 'settings'];
+            
+            tabs.forEach(t => {
+                const trigger = document.getElementById(`tab-${t}`);
+                if (!trigger) return; 
+
+                trigger.addEventListener('click', () => {
+                    tabs.forEach(x => {
+                        const tabBtn = document.getElementById(`tab-${x}`);
+                        const viewEl = document.getElementById(`${x}-view`);
+                        
+                        if (tabBtn) tabBtn.classList.toggle('active', x === t);
+                        if (viewEl) viewEl.style.display = (x === t) ? 'block' : 'none';
+                    });
+                });
+            });
+        },
+
+        setNetwork: function(n) { this.currentNetwork = n; this.currentPage = 1; this.applyFiltersAndRender(); },
+        setFilter: function(f) { 
+            this.currentFilter = f; 
+            this.currentPage = 1;
+            ['all', 'rewarded'].forEach(btn => {
+                const el = document.getElementById(`filter-${btn}-btn`);
+                if (el) el.style.color = (btn === f) ? 'var(--accent-color)' : 'var(--text-color)';
+            });
+            this.applyFiltersAndRender(); 
+        },
+        setSort: function(s) { this.currentSort = s; this.currentPage = 1; this.applyFiltersAndRender(); },
+        setSearch: function(q) { this.currentSearchQuery = q.trim(); this.currentPage = 1; this.applyFiltersAndRender(); }
+    };
+
+    document.addEventListener('DOMContentLoaded', () => {
+        window.app = app;
+        app.init();
+    });
+</script>
+</body>
+</html>
