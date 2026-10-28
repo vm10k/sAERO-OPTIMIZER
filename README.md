@@ -119,4 +119,4 @@ The application interfaces directly with the following canonical contracts on Ba
 
 ## License
 
-MIT License. See `LICENSE` for further details.
+MIT License.
